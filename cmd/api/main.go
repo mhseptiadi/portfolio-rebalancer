@@ -3,19 +3,31 @@ package main
 import (
 	"log"
 	"net/http"
+	"portfolio-rebalancer/internal/config"
 	"portfolio-rebalancer/internal/handlers"
+	"portfolio-rebalancer/internal/storage"
 )
 
 func main() {
 
+	// Load config
+	cfg := config.LoadConfig()
+
 	// Initializing elasticsearch if needed
-	// if err := storage.InitElastic(); err != nil {
-	// 	log.Fatalf("Failed to initialize Elasticsearch: %v", err)
-	// }
+	elasticStorage, err := storage.InitElastic(cfg.ElasticsearchURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize Elasticsearch: %v", err)
+	}
 
-	http.HandleFunc("/portfolio", handlers.HandlePortfolio)
-	http.HandleFunc("/rebalance", handlers.HandleRebalance)
+	portfolioHandler := handlers.NewPortfolioHandler(elasticStorage)
 
-	log.Println("Server started at :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/portfolio", portfolioHandler.SavePortfolio)
+	mux.HandleFunc("/portfolio/id", portfolioHandler.GetPortfolio)
+	mux.HandleFunc("/portfolios", portfolioHandler.ListPortfolios)
+
+	mux.HandleFunc("/rebalance", portfolioHandler.HandleRebalance)
+
+	log.Println("Server started at :8083")
+	log.Fatal(http.ListenAndServe(":8083", mux))
 }

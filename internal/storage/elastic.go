@@ -6,26 +6,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"portfolio-rebalancer/internal/models"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 )
 
-var esClient *elasticsearch.Client
+// var esClient *elasticsearch.Client
+
+type ElasticStorage struct {
+	esClient          *elasticsearch.Client
+	portfoliosIndex   string
+	transactionsIndex string
+}
 
 // InitElastic initializes elasticsearch connection with retry logic
-func InitElastic() error {
+func InitElastic(elasticsearchURL string) (*ElasticStorage, error) {
 	cfg := elasticsearch.Config{
 		Addresses: []string{
-			os.Getenv("ELASTICSEARCH_URL"),
+			elasticsearchURL,
 		},
 	}
 
 	var client *elasticsearch.Client
 	var err error
+	es := &ElasticStorage{
+		esClient:          client,
+		portfoliosIndex:   "portfolios",
+		transactionsIndex: "transactions",
+	}
 
 	for i := 1; i <= 5; i++ {
 		client, err = elasticsearch.NewClient(cfg)
@@ -35,8 +46,8 @@ func InitElastic() error {
 			_, err = client.Info()
 			if err == nil {
 				log.Println("Connected to Elasticsearch")
-				esClient = client
-				return nil
+				es.esClient = client
+				return es, nil
 			}
 			log.Printf("Client created, but ES not ready: %v", err)
 		}
@@ -45,16 +56,92 @@ func InitElastic() error {
 		time.Sleep(5 * time.Second)
 	}
 
-	return fmt.Errorf("failed to connect to Elasticsearch after retries: %w", err)
+	return nil, fmt.Errorf("failed to connect to Elasticsearch after retries: %w", err)
 }
 
-func SavePortfolio(ctx context.Context, p models.Portfolio) error {
+// createIndicesWithMapping defines the exact schema for our models
+func (es *ElasticStorage) createIndicesWithMapping(ctx context.Context) error {
+	// 1. Transaction Mapping (Notice created_at is strictly a "date")
+	txMapping := `{
+		"mappings": {
+			"properties": {
+				"id": { "type": "keyword" },
+				"user_id": { "type": "keyword" },
+				"type": { "type": "keyword" },
+				"allocation_type": { "type": "keyword" },
+				"amount": { "type": "integer" },
+				"order": { "type": "integer" },
+				"created_at": { "type": "date" },
+				"updated_at": { "type": "date" }
+			}
+		}
+	}`
+
+	// 2. Portfolio Mapping (Handling the nested struct)
+	portfolioMapping := `{
+		"mappings": {
+			"properties": {
+				"user_id": { "type": "keyword" },
+				"allocation": {
+					"properties": {
+						"stocks": { "type": "integer" },
+						"bonds": { "type": "integer" },
+						"gold": { "type": "integer" }
+					}
+				},
+				"created_at": { "type": "date" },
+				"updated_at": { "type": "date" }
+			}
+		}
+	}`
+
+	if err := es.createIndexIfNotExists(ctx, es.transactionsIndex, txMapping); err != nil {
+		return err
+	}
+	if err := es.createIndexIfNotExists(ctx, es.portfoliosIndex, portfolioMapping); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (es *ElasticStorage) createIndexIfNotExists(ctx context.Context, indexName, mapping string) error {
+	// Check if the index already exists
+	existsRes, err := esapi.IndicesExistsRequest{
+		Index: []string{indexName},
+	}.Do(ctx, es.esClient)
+	if err != nil {
+		return err
+	}
+	defer existsRes.Body.Close()
+
+	if existsRes.StatusCode == 200 {
+		return nil
+	}
+
+	createRes, err := esapi.IndicesCreateRequest{
+		Index: indexName,
+		Body:  bytes.NewReader([]byte(mapping)),
+	}.Do(ctx, es.esClient)
+	if err != nil {
+		return err
+	}
+	defer createRes.Body.Close()
+
+	if createRes.IsError() {
+		return fmt.Errorf("error creating index %s: %s", indexName, createRes.Status())
+	}
+
+	return nil
+}
+
+func (es *ElasticStorage) SavePortfolio(ctx context.Context, p models.Portfolio) error {
 	body, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
 
-	res, err := esClient.Index("portfolios", bytes.NewReader(body), esClient.Index.WithDocumentID(p.UserID))
+	res, err := es.esClient.Index("portfolios", bytes.NewReader(body), es.esClient.Index.WithDocumentID(p.UserID))
 	if err != nil {
 		return err
 	}
@@ -68,8 +155,8 @@ func SavePortfolio(ctx context.Context, p models.Portfolio) error {
 	return nil
 }
 
-func GetPortfolio(ctx context.Context, userID string) (*models.Portfolio, error) {
-	res, err := esClient.Get("portfolios", userID)
+func (es *ElasticStorage) GetPortfolio(ctx context.Context, userID string) (*models.Portfolio, error) {
+	res, err := es.esClient.Get("portfolios", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -88,4 +175,39 @@ func GetPortfolio(ctx context.Context, userID string) (*models.Portfolio, error)
 	}
 
 	return &esResp.Source, nil
+}
+
+func (es *ElasticStorage) ListPortfolios(ctx context.Context) ([]models.Portfolio, error) {
+	body := `{"query":{"match_all":{}},"size":10000}`
+	res, err := es.esClient.Search(
+		es.esClient.Search.WithContext(ctx),
+		es.esClient.Search.WithIndex(es.portfoliosIndex),
+		es.esClient.Search.WithBody(bytes.NewReader([]byte(body))),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, fmt.Errorf("error listing portfolios: %s", res.String())
+	}
+
+	var searchResp struct {
+		Hits struct {
+			Hits []struct {
+				Source models.Portfolio `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&searchResp); err != nil {
+		return nil, err
+	}
+
+	out := make([]models.Portfolio, 0, len(searchResp.Hits.Hits))
+	for _, h := range searchResp.Hits.Hits {
+		out = append(out, h.Source)
+	}
+	return out, nil
 }

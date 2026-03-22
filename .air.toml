@@ -1,0 +1,17 @@
+# Live reload for cmd/api — run `air` from the repo root.
+# Install: go install github.com/air-verse/air@latest
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/api.exe"
+  cmd = "go build -o ./tmp/api.exe ./cmd/api"
+  delay = 500
+  exclude_dir = ["tmp", "vendor", ".git"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true
