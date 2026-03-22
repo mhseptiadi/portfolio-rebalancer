@@ -1,15 +1,29 @@
-FROM golang:1.20-alpine
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
-RUN go build -o /portfolio-rebalancer ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/worker ./cmd/worker
 
-EXPOSE 8080
+FROM alpine:latest AS api-runner
 
-CMD ["/portfolio-rebalancer"]
+WORKDIR /app
+
+COPY --from=builder /bin/api .
+
+EXPOSE 8083
+
+CMD ["./api"]
+
+FROM alpine:latest AS worker-runner
+
+WORKDIR /app
+
+COPY --from=builder /bin/worker .
+
+CMD ["./worker"]

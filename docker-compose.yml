@@ -54,3 +54,30 @@ services:
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
     depends_on:
       - kafka
+
+  api:
+    build: 
+      context: .
+      target: api-runner # Tells Docker to stop building after STAGE 2a
+    container_name: portfolio-api
+    ports:
+      - "8083:8083"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      - kafka
+      - elasticsearch
+
+  worker:
+    build: 
+      context: .
+      target: worker-runner # Tells Docker to build STAGE 1, then jump to STAGE 2b
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      - kafka
+      - elasticsearch
+    deploy:
+      replicas: 3      
