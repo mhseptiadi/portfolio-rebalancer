@@ -48,8 +48,6 @@ go test ./...
         - `Asset` is the type of user asset to be transferred (eg: stocks, bonds, gold etc.)
         - `RebalancePercent` is the percentage of the asset transferred
 
-- Feel free to edit/add models
-
 
 ## APIs
 
