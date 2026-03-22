@@ -224,6 +224,7 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 	targetPortfolio := models.Portfolio{
 		UserID:     req.UserID,
 		Allocation: req.NewAllocation,
+		CreatedAt:  portfolio.CreatedAt,
 		UpdatedAt:  time.Now(),
 	}
 
@@ -235,20 +236,9 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 
 	log.Println("rebalanceTransactions==", rebalanceTransactions)
 
-	// TODO: transaction n portfolio should be saved in a single session to avoid partial updates
-	for _, transaction := range rebalanceTransactions {
-		err = h.store.SaveTransaction(ctx, transaction)
-		if err != nil {
-			log.Println("failed to save transaction")
-			return fmt.Errorf("failed to save transaction")
-		}
-	}
-
-	// save new portfolio
-	err = h.store.SavePortfolio(ctx, targetPortfolio)
-	if err != nil {
-		log.Println("failed to save new portfolio")
-		return fmt.Errorf("failed to save new portfolio")
+	if err := h.store.SaveRebalance(ctx, targetPortfolio, rebalanceTransactions); err != nil {
+		log.Println("failed to save rebalance", err)
+		return err
 	}
 
 	log.Println("HandleRebalanceMessage completed")

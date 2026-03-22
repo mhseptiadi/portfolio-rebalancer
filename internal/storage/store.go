@@ -13,4 +13,5 @@ type Store interface {
 	ListPortfolios(ctx context.Context) ([]models.Portfolio, error)
 	SaveTransaction(ctx context.Context, t models.Transaction) error
 	ListTransactions(ctx context.Context, userID string) ([]models.Transaction, error)
+	SaveRebalance(ctx context.Context, p models.Portfolio, txs []models.Transaction) error
 }

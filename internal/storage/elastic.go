@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"portfolio-rebalancer/internal/models"
@@ -214,13 +215,18 @@ func (es *ElasticStorage) ListPortfolios(ctx context.Context) ([]models.Portfoli
 	return out, nil
 }
 
-func (es *ElasticStorage) SaveTransaction(ctx context.Context, t models.Transaction) error {
+func normalizeTransactionTimestamps(t models.Transaction) models.Transaction {
 	if t.UpdatedAt.IsZero() {
 		t.UpdatedAt = t.CreatedAt
 		if t.UpdatedAt.IsZero() {
 			t.UpdatedAt = time.Now().UTC()
 		}
 	}
+	return t
+}
+
+func (es *ElasticStorage) SaveTransaction(ctx context.Context, t models.Transaction) error {
+	t = normalizeTransactionTimestamps(t)
 
 	body, err := json.Marshal(t)
 	if err != nil {
@@ -243,6 +249,86 @@ func (es *ElasticStorage) SaveTransaction(ctx context.Context, t models.Transact
 	}
 
 	log.Printf("Transaction saved id=%s user=%s", t.ID, t.UserID)
+	return nil
+}
+
+func (es *ElasticStorage) SaveRebalance(ctx context.Context, p models.Portfolio, txs []models.Transaction) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+
+	for _, t := range txs {
+		t = normalizeTransactionTimestamps(t)
+		meta := map[string]map[string]string{
+			"index": {
+				"_index": es.transactionsIndex,
+				"_id":    t.ID,
+			},
+		}
+		if err := enc.Encode(meta); err != nil {
+			return err
+		}
+		if err := enc.Encode(t); err != nil {
+			return err
+		}
+	}
+
+	pmeta := map[string]map[string]string{
+		"index": {
+			"_index": es.portfoliosIndex,
+			"_id":    p.UserID,
+		},
+	}
+	if err := enc.Encode(pmeta); err != nil {
+		return err
+	}
+	if err := enc.Encode(p); err != nil {
+		return err
+	}
+
+	res, err := esapi.BulkRequest{
+		Body:    &buf,
+		Refresh: "wait_for",
+	}.Do(ctx, es.esClient)
+	if err != nil {
+		return fmt.Errorf("failed to save rebalance: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return fmt.Errorf("failed to save rebalance: %s", res.String())
+	}
+
+	var bulkResp struct {
+		Errors bool `json:"errors"`
+		Items  []map[string]struct {
+			Status int `json:"status"`
+			Error  struct {
+				Type   string `json:"type"`
+				Reason string `json:"reason"`
+			} `json:"error"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&bulkResp); err != nil {
+		return fmt.Errorf("failed to decode bulk response: %w", err)
+	}
+
+	if bulkResp.Errors {
+		var reasons []string
+		for _, item := range bulkResp.Items {
+			for _, op := range item {
+				if op.Status >= 300 {
+					if op.Error.Reason != "" {
+						reasons = append(reasons, op.Error.Reason)
+					} else {
+						reasons = append(reasons, fmt.Sprintf("status %d", op.Status))
+					}
+				}
+			}
+		}
+		return fmt.Errorf("failed to save rebalance: %s", strings.Join(reasons, "; "))
+	}
+
+	log.Printf("Rebalance saved user=%s txs=%d", p.UserID, len(txs))
 	return nil
 }
 

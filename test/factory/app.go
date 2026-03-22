@@ -81,6 +81,23 @@ func (m *MemoryStore) SaveTransaction(ctx context.Context, t models.Transaction)
 	return nil
 }
 
+func (m *MemoryStore) SaveRebalance(ctx context.Context, p models.Portfolio, txs []models.Transaction) error {
+	_ = ctx
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.ErrSaveTransaction != nil {
+		return fmt.Errorf("failed to save transaction")
+	}
+	if m.ErrSavePortfolio != nil {
+		return fmt.Errorf("failed to save new portfolio")
+	}
+	for _, t := range txs {
+		m.Txs = append(m.Txs, t)
+	}
+	m.Portfolios[p.UserID] = p
+	return nil
+}
+
 func (m *MemoryStore) ListTransactions(ctx context.Context, userID string) ([]models.Transaction, error) {
 	_ = ctx
 	m.mu.Lock()
@@ -168,6 +185,6 @@ func NewTestHarnessNoKafka() *TestHarness {
 
 // Ensure interfaces stay aligned if signatures change.
 var (
-	_ storage.Store    = (*MemoryStore)(nil)
+	_ storage.Store          = (*MemoryStore)(nil)
 	_ kafka.MessagePublisher = (*MockPublisher)(nil)
 )

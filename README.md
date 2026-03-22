@@ -111,12 +111,6 @@ Base URL: `http://localhost:8083`
 | `POST` | `/rebalance` | Enqueue a rebalance. JSON body: `user_id`, `new_allocation` (same shape as allocation). Publishes to Kafka; workers apply the rebalance, persist transactions, and update the portfolio. Returns `200` when the message is published. |
 | `GET` | `/transactions` | List rebalance transactions for a user. Query: `user_id` (required). |
 
-
-## TODO
-
-- **`internal/handlers/portfolio.go`** (around line 238, `HandleRebalanceMessage`): transactions and portfolio should be saved in a **single session** (atomic unit of work) to avoid **partial updates** if one of the writes fails after others succeed.
-
-
 ## Example
 
 - `/portfolio` API creates a user with ID = 1 and Allocation = {"stocks": 60, "bonds": 30, "gold": 10}
