@@ -211,3 +211,86 @@ func (es *ElasticStorage) ListPortfolios(ctx context.Context) ([]models.Portfoli
 	}
 	return out, nil
 }
+
+func (es *ElasticStorage) SaveTransaction(ctx context.Context, t models.Transaction) error {
+	if t.UpdatedAt.IsZero() {
+		t.UpdatedAt = t.CreatedAt
+		if t.UpdatedAt.IsZero() {
+			t.UpdatedAt = time.Now().UTC()
+		}
+	}
+
+	body, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+
+	res, err := es.esClient.Index(
+		es.transactionsIndex,
+		bytes.NewReader(body),
+		es.esClient.Index.WithContext(ctx),
+		es.esClient.Index.WithDocumentID(t.ID),
+	)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return fmt.Errorf("error saving transaction: %s", res.String())
+	}
+
+	log.Printf("Transaction saved id=%s user=%s", t.ID, t.UserID)
+	return nil
+}
+
+func (es *ElasticStorage) ListTransactions(ctx context.Context, portfolioID string) ([]models.Transaction, error) {
+	queryBody := map[string]interface{}{
+		"query": map[string]interface{}{
+			"term": map[string]interface{}{
+				"user_id": portfolioID,
+			},
+		},
+		"sort": []interface{}{
+			map[string]string{"created_at": "desc"},
+			map[string]string{"order": "desc"},
+		},
+		"size": 10000,
+	}
+	q, err := json.Marshal(queryBody)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := es.esClient.Search(
+		es.esClient.Search.WithContext(ctx),
+		es.esClient.Search.WithIndex(es.transactionsIndex),
+		es.esClient.Search.WithBody(bytes.NewReader(q)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, fmt.Errorf("error listing transactions: %s", res.String())
+	}
+
+	var searchResp struct {
+		Hits struct {
+			Hits []struct {
+				Source models.Transaction `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&searchResp); err != nil {
+		return nil, err
+	}
+
+	out := make([]models.Transaction, 0, len(searchResp.Hits.Hits))
+	for _, h := range searchResp.Hits.Hits {
+		out = append(out, h.Source)
+	}
+	return out, nil
+}

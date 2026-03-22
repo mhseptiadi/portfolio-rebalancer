@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"portfolio-rebalancer/internal/kafka"
 	"portfolio-rebalancer/internal/models"
+	"portfolio-rebalancer/internal/services"
 	"portfolio-rebalancer/internal/storage"
 	"time"
 )
@@ -177,4 +180,96 @@ func (h *portfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Reques
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode("Rebalance request published")
+}
+
+func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
+	log.Println("HandleRebalanceMessage==", string(msg))
+	ctx := context.Background()
+	var req models.UpdatedPortfolio
+	err := json.Unmarshal(msg, &req)
+	if err != nil {
+		return err
+	}
+
+	if req.UserID == "" {
+		log.Println("user_id is required")
+		return nil
+	}
+
+	if err := models.ValidateAllocation(req.NewAllocation); err != nil {
+		log.Println("invalid allocation")
+		return nil
+	}
+
+	portfolio, err := h.elasticStorage.GetPortfolio(ctx, req.UserID)
+	if err != nil {
+		log.Println("failed to get portfolio")
+		return nil
+	}
+	if portfolio == nil {
+		log.Println("portfolio not found")
+		return nil
+	}
+
+	if portfolio.Allocation.Stocks == req.NewAllocation.Stocks && portfolio.Allocation.Bonds == req.NewAllocation.Bonds && portfolio.Allocation.Gold == req.NewAllocation.Gold {
+		log.Println("new allocation is the same as the current allocation")
+		return nil
+	}
+
+	targetPortfolio := models.Portfolio{
+		UserID:     req.UserID,
+		Allocation: req.NewAllocation,
+		UpdatedAt:  time.Now(),
+	}
+
+	rebalanceTransactions, err := services.CalculateRebalance(*portfolio, targetPortfolio)
+	if err != nil {
+		log.Println("failed to calculate rebalance")
+		return fmt.Errorf("failed to calculate rebalance")
+	}
+
+	log.Println("rebalanceTransactions==", rebalanceTransactions)
+
+	for _, transaction := range rebalanceTransactions {
+		err = h.elasticStorage.SaveTransaction(ctx, transaction)
+		if err != nil {
+			log.Println("failed to save transaction")
+			return fmt.Errorf("failed to save transaction")
+		}
+	}
+
+	// save new portfolio
+	err = h.elasticStorage.SavePortfolio(ctx, targetPortfolio)
+	if err != nil {
+		log.Println("failed to save new portfolio")
+		return fmt.Errorf("failed to save new portfolio")
+	}
+
+	log.Println("HandleRebalanceMessage completed")
+	return nil
+}
+
+func (h *portfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
+	log.Println("ListTransactions==", r.URL.Query())
+	ctx := r.Context()
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+
+	list, err := h.elasticStorage.ListTransactions(ctx, userID)
+	if err != nil {
+		http.Error(w, "Failed to list transactions", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(list)
 }

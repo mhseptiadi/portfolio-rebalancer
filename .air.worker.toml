@@ -1,0 +1,17 @@
+# Live reload for cmd/worker — run `air` from the repo root.
+# Install: go install github.com/air-verse/air@latest
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/worker.exe"
+  cmd = "go build -o ./tmp/worker.exe ./cmd/worker"
+  delay = 500
+  exclude_dir = ["tmp", "vendor", ".git"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
-	"net/http"
 	"portfolio-rebalancer/internal/config"
 	"portfolio-rebalancer/internal/handlers"
 	"portfolio-rebalancer/internal/kafka"
 	"portfolio-rebalancer/internal/storage"
+	"time"
 )
 
 func main() {
@@ -14,6 +15,8 @@ func main() {
 	// Load config
 	cfg := config.LoadConfig()
 	log.Println("Config==", cfg)
+
+	ctx := context.Background()
 
 	// Initializing elasticsearch if needed
 	elasticStorage, err := storage.InitElastic(cfg.ElasticsearchURL)
@@ -26,16 +29,23 @@ func main() {
 	}
 
 	portfolioHandler := handlers.NewPortfolioHandler(elasticStorage, kafka)
+	log.Println("portfolioHandler== 123", portfolioHandler)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/portfolio", portfolioHandler.SavePortfolio)
-	mux.HandleFunc("/portfolio/id", portfolioHandler.GetPortfolio)
-	mux.HandleFunc("/portfolios", portfolioHandler.ListPortfolios)
+	// Block until the consumer loop exits (normally when ctx is cancelled).
+	done := make(chan error, 1)
+	go func() {
+		done <- kafka.ConsumeMessage(ctx, portfolioHandler.HandleRebalanceMessage)
+	}()
 
-	mux.HandleFunc("/rebalance", portfolioHandler.HandleRebalance)
-
-	mux.HandleFunc("/transactions", portfolioHandler.ListTransactions)
-
-	log.Println("Server started at :8083")
-	log.Fatal(http.ListenAndServe(":8083", mux))
+	select {
+	case err := <-done:
+		if err != nil {
+			log.Printf("kafka consumer stopped: %v", err)
+		}
+	case <-ctx.Done():
+		// Give the loop a short time to shut down cleanly.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = shutdownCtx
+	}
 }
