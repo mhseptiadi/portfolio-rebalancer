@@ -546,7 +546,7 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "worker-ok",
 			NewAllocation: models.Allocation{
-				Stocks: 70, Bonds: 20, Gold: 10,
+				Stocks: 70, Bonds: 15, Gold: 15,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
@@ -565,6 +565,17 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		}
 		if len(txs) == 0 {
 			t.Fatal("expected transactions")
+		}
+
+		// check if transactions are selling bonds 15 and buying stocks 10 and gold 5
+		if txs[0].Type != "SELL" || txs[0].AllocationType != "bonds" || txs[0].Amount != 15 {
+			t.Fatalf("expected sell bonds 15, got %+v", txs[0])
+		}
+		if txs[1].Type != "BUY" || txs[1].AllocationType != "stocks" || txs[1].Amount != 10 {
+			t.Fatalf("expected buy stocks 10, got %+v", txs[1])
+		}
+		if txs[2].Type != "BUY" || txs[2].AllocationType != "gold" || txs[2].Amount != 5 {
+			t.Fatalf("expected buy gold 15, got %+v", txs[2])
 		}
 	})
 
