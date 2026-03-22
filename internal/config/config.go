@@ -15,7 +15,7 @@ type Config struct {
 func LoadConfig() Config {
 	cfg := Config{
 		HTTPAddr:         getenv("HTTP_ADDR", ":8080"),
-		KafkaBrokers:     []string{getenv("KAFKA_BROKERS", "localhost:29092")},
+		KafkaBrokers:     []string{getenv("KAFKA_BROKERS", "127.0.0.1:29092")},
 		KafkaTopic:       getenv("KAFKA_TOPIC", "portfolio-events"),
 		KafkaGroupID:     getenv("KAFKA_GROUP_ID", "api"),
 		ElasticsearchURL: getenv("ELASTICSEARCH_URL", "http://localhost:9200"),

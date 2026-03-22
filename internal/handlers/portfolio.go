@@ -4,16 +4,20 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"portfolio-rebalancer/internal/kafka"
 	"portfolio-rebalancer/internal/models"
 	"portfolio-rebalancer/internal/storage"
+	"time"
 )
 
 type portfolioHandler struct {
 	elasticStorage *storage.ElasticStorage
+	kafka          *kafka.Kafka
 }
 
-func NewPortfolioHandler(elasticStorage *storage.ElasticStorage) *portfolioHandler {
-	return &portfolioHandler{elasticStorage: elasticStorage}
+func NewPortfolioHandler(elasticStorage *storage.ElasticStorage, kafka *kafka.Kafka) *portfolioHandler {
+	log.Println("NewPortfolioHandler==", elasticStorage, kafka)
+	return &portfolioHandler{elasticStorage: elasticStorage, kafka: kafka}
 }
 
 // SavePortfolio handles new portfolio creation requests (feel free to update the request parameter/model)
@@ -34,6 +38,14 @@ func (h *portfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request)
 	err := json.NewDecoder(r.Body).Decode(&p)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	p.CreatedAt = time.Now()
+	p.UpdatedAt = time.Now()
+
+	if err := models.ValidateAllocation(p.Allocation); err != nil {
+		http.Error(w, "Invalid allocation", http.StatusBadRequest)
 		return
 	}
 
@@ -111,17 +123,58 @@ func (h *portfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request
 //	    "new_allocation": {"stocks": 70, "bonds": 20, "gold": 10}
 //	}
 func (h *portfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req models.UpdatedPortfolio
-	json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-	log.Println("HandleRebalance==", req)
+	if req.UserID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
 
-	// TODO: Add Logic here
+	if err := models.ValidateAllocation(req.NewAllocation); err != nil {
+		http.Error(w, "Invalid allocation", http.StatusBadRequest)
+		return
+	}
+
+	portfolio, err := h.elasticStorage.GetPortfolio(ctx, req.UserID)
+	if err != nil {
+		http.Error(w, "Failed to get portfolio", http.StatusInternalServerError)
+		return
+	}
+	if portfolio == nil {
+		http.Error(w, "Portfolio not found", http.StatusNotFound)
+		return
+	}
+
+	if h.kafka == nil {
+		http.Error(w, "kafka is not configured", http.StatusInternalServerError)
+		return
+	}
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "Failed to marshal request", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.kafka.PublishMessage(r.Context(), payload); err != nil {
+		log.Println("failed to publish rebalance request", err)
+		http.Error(w, "failed to enqueue rebalance", http.StatusInternalServerError)
+		return
+	}
+
+	log.Println("HandleRebalance==", string(payload))
 
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode("Rebalance request published")
 }
