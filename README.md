@@ -11,6 +11,17 @@ This is a take-home assignment to build backend APIs for managing and rebalancin
 - Docker
 
 
+## Architecture choices
+
+### Why Kafka KRaft?
+
+This stack uses Kafka in **KRaft** mode (Kafka Raft metadata): **no ZooKeeper**, **faster broker startup**, and a metadata layer designed for **stronger fault tolerance** and simpler operations than the legacy ZooKeeper deployment model.
+
+### Why split the API and the worker?
+
+The **HTTP API** and **Kafka consumers** run as **separate services** so you can **scale consumer throughput independently** from request-handling capacity. Rebalance work can grow with topic partitions and worker replicas without forcing the same scaling shape as public API traffic.
+
+
 ## Running the Project
 
 Docker Compose starts Elasticsearch, Kafka, Kafka UI, the **API** container, and **worker** containers (API and worker are separate images/services). The HTTP API listens on **port 8083** so it does not conflict with another service using 8080 on your machine.
@@ -99,6 +110,11 @@ Base URL: `http://localhost:8083`
 | `GET` | `/portfolios` | List all portfolios. |
 | `POST` | `/rebalance` | Enqueue a rebalance. JSON body: `user_id`, `new_allocation` (same shape as allocation). Publishes to Kafka; workers apply the rebalance, persist transactions, and update the portfolio. Returns `200` when the message is published. |
 | `GET` | `/transactions` | List rebalance transactions for a user. Query: `user_id` (required). |
+
+
+## TODO
+
+- **`internal/handlers/portfolio.go`** (around line 238, `HandleRebalanceMessage`): transactions and portfolio should be saved in a **single session** (atomic unit of work) to avoid **partial updates** if one of the writes fails after others succeed.
 
 
 ## Example

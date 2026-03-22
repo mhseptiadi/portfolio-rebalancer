@@ -235,6 +235,7 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 
 	log.Println("rebalanceTransactions==", rebalanceTransactions)
 
+	// TODO: transaction n portfolio should be saved in a single session to avoid partial updates
 	for _, transaction := range rebalanceTransactions {
 		err = h.store.SaveTransaction(ctx, transaction)
 		if err != nil {
