@@ -13,9 +13,20 @@ This is a take-home assignment to build backend APIs for managing and rebalancin
 
 ## Running the Project
 
-```
+Docker Compose starts Elasticsearch, Kafka, Kafka UI, the **API** container, and **worker** containers (API and worker are separate images/services). The HTTP API listens on **port 8083** so it does not conflict with another service using 8080 on your machine.
+
+```bash
 docker compose build
 docker compose up
+```
+
+The API is available at `http://localhost:8083`.
+
+
+## Running tests
+
+```bash
+go test ./...
 ```
 
 
@@ -41,31 +52,16 @@ docker compose up
 
 
 ## APIs
-- /portfolio : This takes in userId and current user allocation. This will api will be used to create users in our system along with their portfolio allocation.
 
-- /rebalance : This is the API that simulates a third-party provider, which calculates a user's portfolio allocation based on market changes and returns an updated allocation. For the current task, we will manually call this API to mock the third-party interaction.
+Base URL: `http://localhost:8083`
 
-
-- Feel free to edit/add APIs
-
-
-## TODO
-
-- Complete the `/portfolio` API
-    - Accept a new user's portfolio details via a POST request.
-    - Persist the portfolio in Elasticsearch.
-
-- Complete the `/rebalance` API
-    - Accept a user's updated portfolio based on market conditions via a POST request.
-    - Maintain the user's original allocation percentages for reference.
-    - Calculate the transactions needed to rebalance the user's current portfolio allocation percentage back to their original allocation percentage.
-    - Save the RebalanceTransaction in Elasticsearch.
-
-- Assuming we could get multiple rebalance api calls from the provider, we need to ensure our system can handle load and is fault tolerant(could be supported by adding queue and retries).
-
-- Write a README
-
-- Feel free to add further capabilities.
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/portfolio` | Create a portfolio. JSON body: `user_id`, `allocation` (`stocks`, `bonds`, `gold` as percentages summing to 100). Returns `201` with the saved portfolio. |
+| `GET` | `/portfolio/id` | Get one portfolio. Query: `user_id` (required). |
+| `GET` | `/portfolios` | List all portfolios. |
+| `POST` | `/rebalance` | Enqueue a rebalance. JSON body: `user_id`, `new_allocation` (same shape as allocation). Publishes to Kafka; workers apply the rebalance, persist transactions, and update the portfolio. Returns `200` when the message is published. |
+| `GET` | `/transactions` | List rebalance transactions for a user. Query: `user_id` (required). |
 
 
 ## Example
@@ -88,12 +84,3 @@ docker compose up
             UserID = "1"
 	        Buy 10% of bonds
 
-
-## Evaluation Criteria
-
-- Code quality and structure
-- Logical correctness
-- Fault tolerance
-- Extensibility and Scalablility
-- Test coverage
-- Optional: Error handling and edge cases.
