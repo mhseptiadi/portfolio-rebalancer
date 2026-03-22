@@ -13,14 +13,15 @@ import (
 	"time"
 )
 
-type portfolioHandler struct {
-	elasticStorage *storage.ElasticStorage
-	kafka          *kafka.Kafka
+// PortfolioHandler serves the portfolio HTTP API and Kafka rebalance consumer callbacks.
+type PortfolioHandler struct {
+	store storage.Store
+	kafka kafka.MessagePublisher
 }
 
-func NewPortfolioHandler(elasticStorage *storage.ElasticStorage, kafka *kafka.Kafka) *portfolioHandler {
-	log.Println("NewPortfolioHandler==", elasticStorage, kafka)
-	return &portfolioHandler{elasticStorage: elasticStorage, kafka: kafka}
+func NewPortfolioHandler(store storage.Store, pub kafka.MessagePublisher) *PortfolioHandler {
+	log.Println("NewPortfolioHandler==", store, pub)
+	return &PortfolioHandler{store: store, kafka: pub}
 }
 
 // SavePortfolio handles new portfolio creation requests (feel free to update the request parameter/model)
@@ -30,7 +31,7 @@ func NewPortfolioHandler(elasticStorage *storage.ElasticStorage, kafka *kafka.Ka
 //	    "user_id": "1",
 //	    "allocation": {"stocks": 60, "bonds": 30, "gold": 10}
 //	}
-func (h *portfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -55,14 +56,14 @@ func (h *portfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request)
 	log.Println("HandlePortfolio==", p)
 
 	// Check if user_id already exists
-	portfolio, _ := h.elasticStorage.GetPortfolio(ctx, p.UserID)
+	portfolio, _ := h.store.GetPortfolio(ctx, p.UserID)
 	if portfolio != nil {
 		http.Error(w, "User already exists", http.StatusBadRequest)
 		return
 	}
 
 	// Save portfolio to Elasticsearch
-	err = h.elasticStorage.SavePortfolio(ctx, p)
+	err = h.store.SavePortfolio(ctx, p)
 	if err != nil {
 		http.Error(w, "Failed to save portfolio", http.StatusInternalServerError)
 		return
@@ -72,7 +73,7 @@ func (h *portfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(p)
 }
 
-func (h *portfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	log.Println("GetPortfolio==", r.URL.Query())
 	ctx := r.Context()
 	if r.Method != http.MethodGet {
@@ -86,7 +87,7 @@ func (h *portfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	p, err := h.elasticStorage.GetPortfolio(ctx, userID)
+	p, err := h.store.GetPortfolio(ctx, userID)
 	if err != nil {
 		if err.Error() == "user not found" {
 			http.Error(w, "Portfolio not found", http.StatusNotFound)
@@ -100,7 +101,7 @@ func (h *portfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(p)
 }
 
-func (h *portfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request) {
 	log.Println("ListPortfolios==", r.URL.Query())
 	ctx := r.Context()
 	if r.Method != http.MethodGet {
@@ -108,7 +109,7 @@ func (h *portfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	list, err := h.elasticStorage.ListPortfolios(ctx)
+	list, err := h.store.ListPortfolios(ctx)
 	if err != nil {
 		http.Error(w, "Failed to list portfolios", http.StatusInternalServerError)
 		return
@@ -125,7 +126,7 @@ func (h *portfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request
 //	    "user_id": "1",
 //	    "new_allocation": {"stocks": 70, "bonds": 20, "gold": 10}
 //	}
-func (h *portfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -149,8 +150,12 @@ func (h *portfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	portfolio, err := h.elasticStorage.GetPortfolio(ctx, req.UserID)
+	portfolio, err := h.store.GetPortfolio(ctx, req.UserID)
 	if err != nil {
+		if err.Error() == "user not found" {
+			http.Error(w, "Portfolio not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, "Failed to get portfolio", http.StatusInternalServerError)
 		return
 	}
@@ -182,7 +187,7 @@ func (h *portfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode("Rebalance request published")
 }
 
-func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
+func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 	log.Println("HandleRebalanceMessage==", string(msg))
 	ctx := context.Background()
 	var req models.UpdatedPortfolio
@@ -201,7 +206,7 @@ func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
 		return nil
 	}
 
-	portfolio, err := h.elasticStorage.GetPortfolio(ctx, req.UserID)
+	portfolio, err := h.store.GetPortfolio(ctx, req.UserID)
 	if err != nil {
 		log.Println("failed to get portfolio")
 		return nil
@@ -231,7 +236,7 @@ func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
 	log.Println("rebalanceTransactions==", rebalanceTransactions)
 
 	for _, transaction := range rebalanceTransactions {
-		err = h.elasticStorage.SaveTransaction(ctx, transaction)
+		err = h.store.SaveTransaction(ctx, transaction)
 		if err != nil {
 			log.Println("failed to save transaction")
 			return fmt.Errorf("failed to save transaction")
@@ -239,7 +244,7 @@ func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
 	}
 
 	// save new portfolio
-	err = h.elasticStorage.SavePortfolio(ctx, targetPortfolio)
+	err = h.store.SavePortfolio(ctx, targetPortfolio)
 	if err != nil {
 		log.Println("failed to save new portfolio")
 		return fmt.Errorf("failed to save new portfolio")
@@ -249,7 +254,7 @@ func (h *portfolioHandler) HandleRebalanceMessage(msg []byte) error {
 	return nil
 }
 
-func (h *portfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 	log.Println("ListTransactions==", r.URL.Query())
 	ctx := r.Context()
 	if r.Method != http.MethodGet {
@@ -263,7 +268,7 @@ func (h *portfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	list, err := h.elasticStorage.ListTransactions(ctx, userID)
+	list, err := h.store.ListTransactions(ctx, userID)
 	if err != nil {
 		http.Error(w, "Failed to list transactions", http.StatusInternalServerError)
 		return

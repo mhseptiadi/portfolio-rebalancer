@@ -11,6 +11,11 @@ import (
 
 var writer *kafka.Writer
 
+// MessagePublisher publishes rebalance payloads to the message bus.
+type MessagePublisher interface {
+	PublishMessage(ctx context.Context, payload []byte) error
+}
+
 type Kafka struct {
 	topic   string
 	writer  *kafka.Writer
@@ -18,6 +23,8 @@ type Kafka struct {
 	groupID string
 	brokers []string
 }
+
+var _ MessagePublisher = (*Kafka)(nil)
 
 // InitKafka initializes kafka connection
 func InitKafka(kafkaBrokers []string, topic string, kafkaGroupID string) (*Kafka, error) {

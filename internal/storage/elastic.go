@@ -22,6 +22,8 @@ type ElasticStorage struct {
 	transactionsIndex string
 }
 
+var _ Store = (*ElasticStorage)(nil)
+
 // InitElastic initializes elasticsearch connection with retry logic
 func InitElastic(elasticsearchURL string) (*ElasticStorage, error) {
 	cfg := elasticsearch.Config{
