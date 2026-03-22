@@ -78,31 +78,6 @@ func (k *Kafka) PublishMessage(ctx context.Context, payload []byte) error {
 	return k.writer.WriteMessages(ctx, msg)
 }
 
-// func (k *Kafka) ConsumeMessage(ctx context.Context, handler func([]byte) error) error {
-// 	go func() {
-// 		defer k.reader.Close()
-// 		for {
-// 			msg, err := k.reader.ReadMessage(ctx)
-// 			if err != nil {
-// 				log.Printf("Kafka read error: %v\n", err)
-// 				continue
-// 			}
-
-// 			if bytes.Equal(msg.Value, []byte("ping")) {
-// 				continue
-// 			}
-
-// 			if err := handler(msg.Value); err != nil {
-// 				log.Printf("Kafka handler error: %v\n", err)
-// 				continue
-// 			}
-// 		}
-// 	}()
-
-// 	log.Println("Kafka consumer started")
-// 	return nil
-// }
-
 func (k *Kafka) ConsumeMessage(
 	ctx context.Context,
 	handler func([]byte) error,
@@ -117,7 +92,7 @@ func (k *Kafka) ConsumeMessage(
 			if ctx.Err() != nil {
 				return nil
 			}
-			// For skeleton: keep going on transient errors.
+
 			log.Printf("[kafka] read error: %v", err)
 			continue
 		}

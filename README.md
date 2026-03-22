@@ -22,6 +22,45 @@ docker compose up
 
 The API is available at `http://localhost:8083`.
 
+**Kafka and workers** (edit `docker-compose.yml` to tune):
+
+- **Partitions:** Kafka is configured with `KAFKA_NUM_PARTITIONS` (default **10**) on the `kafka` service. Change that value if you want a different default partition count for new topics.
+- **Workers:** The `worker` service uses `deploy.replicas` (default **3**). That controls how many worker containers run.
+- **Constraint:** Keep the number of **worker replicas less than or equal to** the topic’s partition count. If you scale workers up, raise `KAFKA_NUM_PARTITIONS` (or ensure the rebalance topic has enough partitions) so you do not end up with more consumers than partitions—extra consumers would stay idle and you lose the expected parallelism model.
+
+
+## Local development (Air)
+
+For live reload while you edit Go code, you can run **[Air](https://github.com/air-verse/air)** for the API and worker, and keep Elasticsearch and Kafka on Docker.
+
+1. Install Air: `go install github.com/air-verse/air@latest`
+2. Start only the dependencies (skip the `api` and `worker` services so ports and processes are free):
+
+   ```bash
+   docker compose up elasticsearch kafka kafka-ui
+   ```
+
+3. From the **repository root**, point the apps at the host-mapped broker and Elasticsearch (`docker-compose.yml` exposes Kafka on **29092** for clients outside the Compose network):
+
+   ```bash
+   export KAFKA_BROKERS=localhost:29092
+   export ELASTICSEARCH_URL=http://localhost:9200
+   ```
+
+4. **API** (uses `.air.toml`):
+
+   ```bash
+   air
+   ```
+
+5. **Worker** in a second terminal (uses `.air.worker.toml`):
+
+   ```bash
+   air -c .air.worker.toml
+   ```
+
+The API serves on **http://localhost:8083** (same as the containerized setup). Binaries are written under `tmp/` while Air runs.
+
 
 ## Running tests
 

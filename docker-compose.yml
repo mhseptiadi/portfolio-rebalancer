@@ -1,19 +1,6 @@
 version: '3.8'
 
 services:
-  # api:
-  #   build: .
-  #   container_name: portfolio_rebalancer
-  #   ports:
-  #     - "8080:8080"
-  #   depends_on:
-  #     - elasticsearch
-  #     - kafka
-  #   environment:
-  #     - KAFKA_BROKER=kafka:9092
-  #     - KAFKA_TOPIC=rebalance
-  #     - ELASTICSEARCH_URL=http://elasticsearch:9200
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
     container_name: elasticsearch2
@@ -28,7 +15,7 @@ services:
     container_name: kafka2
     ports:
       - "9092:9092"   # Internal Docker port (Optional to expose, but good for some tools)
-      - "29092:29092" # EXTERNAL port for your local machine
+      - "29092:29092" # EXTERNAL port for your local machine (run air)
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -58,7 +45,7 @@ services:
   api:
     build: 
       context: .
-      target: api-runner # Tells Docker to stop building after STAGE 2a
+      target: api-runner 
     container_name: portfolio-api
     ports:
       - "8083:8083"
@@ -72,7 +59,7 @@ services:
   worker:
     build: 
       context: .
-      target: worker-runner # Tells Docker to build STAGE 1, then jump to STAGE 2b
+      target: worker-runner 
     environment:
       - KAFKA_BROKERS=kafka:9092
       - ELASTICSEARCH_URL=http://elasticsearch:9200
