@@ -20,7 +20,6 @@ type PortfolioHandler struct {
 }
 
 func NewPortfolioHandler(store storage.Store, pub kafka.MessagePublisher) *PortfolioHandler {
-	log.Println("NewPortfolioHandler==", store, pub)
 	return &PortfolioHandler{store: store, kafka: pub}
 }
 
@@ -53,8 +52,6 @@ func (h *PortfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log.Println("HandlePortfolio==", p)
-
 	// Check if user_id already exists
 	portfolio, _ := h.store.GetPortfolio(ctx, p.UserID)
 	if portfolio != nil {
@@ -74,7 +71,6 @@ func (h *PortfolioHandler) SavePortfolio(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) {
-	log.Println("GetPortfolio==", r.URL.Query())
 	ctx := r.Context()
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -188,7 +184,6 @@ func (h *PortfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
-	log.Println("HandleRebalanceMessage==", string(msg))
 	ctx := context.Background()
 	var req models.UpdatedPortfolio
 	err := json.Unmarshal(msg, &req)
@@ -234,8 +229,6 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 		return fmt.Errorf("failed to calculate rebalance")
 	}
 
-	log.Println("rebalanceTransactions==", rebalanceTransactions)
-
 	if err := h.store.SaveRebalance(ctx, targetPortfolio, rebalanceTransactions); err != nil {
 		log.Println("failed to save rebalance", err)
 		return err
@@ -246,7 +239,6 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 }
 
 func (h *PortfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
-	log.Println("ListTransactions==", r.URL.Query())
 	ctx := r.Context()
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

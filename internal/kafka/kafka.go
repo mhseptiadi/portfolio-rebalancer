@@ -9,7 +9,7 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-var writer *kafka.Writer
+// var writer *kafka.Writer
 
 // MessagePublisher publishes rebalance payloads to the message bus.
 type MessagePublisher interface {
@@ -28,8 +28,7 @@ var _ MessagePublisher = (*Kafka)(nil)
 
 // InitKafka initializes kafka connection
 func InitKafka(kafkaBrokers []string, topic string, kafkaGroupID string) (*Kafka, error) {
-	log.Println("InitKafka==", kafkaBrokers, topic, kafkaGroupID)
-	writer = &kafka.Writer{
+	writer := &kafka.Writer{
 		Addr:         kafka.TCP(kafkaBrokers...),
 		Topic:        topic,
 		Balancer:     &kafka.LeastBytes{},
@@ -106,4 +105,25 @@ func (k *Kafka) ConsumeMessage(
 			continue
 		}
 	}
+}
+
+func (k *Kafka) Close() []error {
+	if k == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if k.reader != nil {
+		if err := k.reader.Close(); err != nil {
+			errors = append(errors, err)
+		}
+	}
+	if k.writer != nil {
+		if err := k.writer.Close(); err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	return errors
 }

@@ -3,9 +3,9 @@ package models
 import "time"
 
 type Allocation struct {
-	Stocks int `json:"stocks"`
-	Bonds  int `json:"bonds"`
-	Gold   int `json:"gold"`
+	Stocks float64 `json:"stocks"`
+	Bonds  float64 `json:"bonds"`
+	Gold   float64 `json:"gold"`
 }
 
 type Portfolio struct {
@@ -25,7 +25,7 @@ type Transaction struct {
 	UserID         string    `json:"user_id"`
 	Type           string    `json:"type"` // e.g. "sell", "buy"
 	AllocationType string    `json:"allocation_type"`
-	Amount         int       `json:"amount"`
+	Amount         float64   `json:"amount"`
 	Order          int       `json:"order"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

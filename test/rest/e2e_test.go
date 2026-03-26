@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,8 +31,8 @@ func TestCreatePortfolio(t *testing.T) {
 		h := factory.NewTestHarness()
 		body := map[string]any{
 			"user_id": "user-e2e-new",
-			"allocation": map[string]int{
-				"stocks": 60, "bonds": 30, "gold": 10,
+			"allocation": map[string]float64{
+				"stocks": 60.123, "bonds": 30.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/portfolio", jsonBody(t, body))
@@ -51,7 +52,7 @@ func TestCreatePortfolio(t *testing.T) {
 		if got.UserID != "user-e2e-new" {
 			t.Errorf("user_id = %q", got.UserID)
 		}
-		if got.Allocation.Stocks != 60 || got.Allocation.Bonds != 30 || got.Allocation.Gold != 10 {
+		if got.Allocation.Stocks != 60.123 || got.Allocation.Bonds != 30.456 || got.Allocation.Gold != 9.421 {
 			t.Errorf("allocation = %+v", got.Allocation)
 		}
 	})
@@ -60,8 +61,8 @@ func TestCreatePortfolio(t *testing.T) {
 		h := factory.NewTestHarness()
 		body := map[string]any{
 			"user_id": "user-dup",
-			"allocation": map[string]int{
-				"stocks": 60, "bonds": 30, "gold": 10,
+			"allocation": map[string]float64{
+				"stocks": 60.123, "bonds": 30.456, "gold": 9.421,
 			},
 		}
 		req1 := httptest.NewRequest(http.MethodPost, "/portfolio", jsonBody(t, body))
@@ -100,8 +101,8 @@ func TestCreatePortfolio(t *testing.T) {
 		h := factory.NewTestHarness()
 		body := map[string]any{
 			"user_id": "user-bad-alloc",
-			"allocation": map[string]int{
-				"stocks": 50, "bonds": 30, "gold": 10,
+			"allocation": map[string]float64{
+				"stocks": 50.123, "bonds": 30.456, "gold": 10.0,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/portfolio", jsonBody(t, body))
@@ -125,8 +126,8 @@ func TestCreatePortfolio(t *testing.T) {
 		h.Store.ErrSavePortfolio = io.EOF
 		body := map[string]any{
 			"user_id": "user-save-fail",
-			"allocation": map[string]int{
-				"stocks": 60, "bonds": 30, "gold": 10,
+			"allocation": map[string]float64{
+				"stocks": 60.123, "bonds": 30.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/portfolio", jsonBody(t, body))
@@ -148,7 +149,7 @@ func TestGetPortfolioByID(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-get-ok",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 
@@ -218,7 +219,7 @@ func TestListPortfolios(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-list-1",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 
@@ -266,13 +267,13 @@ func TestRebalanceHTTP(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-reb-http",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		body := map[string]any{
 			"user_id": "user-reb-http",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -306,8 +307,8 @@ func TestRebalanceHTTP(t *testing.T) {
 		h := factory.NewTestHarness()
 		body := map[string]any{
 			"user_id": "",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -327,13 +328,13 @@ func TestRebalanceHTTP(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-reb-bad",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		body := map[string]any{
 			"user_id": "user-reb-bad",
-			"new_allocation": map[string]int{
-				"stocks": 40, "bonds": 40, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 40.123, "bonds": 40.0, "gold": 10.0,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -352,8 +353,8 @@ func TestRebalanceHTTP(t *testing.T) {
 		h := factory.NewTestHarness()
 		body := map[string]any{
 			"user_id": "missing-user",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -373,8 +374,8 @@ func TestRebalanceHTTP(t *testing.T) {
 		h.Store.ErrGetPortfolio = io.ErrUnexpectedEOF
 		body := map[string]any{
 			"user_id": "any",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -394,13 +395,13 @@ func TestRebalanceHTTP(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-no-kafka",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		body := map[string]any{
 			"user_id": "user-no-kafka",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -425,13 +426,13 @@ func TestRebalanceHTTP(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-pub-fail",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		body := map[string]any{
 			"user_id": "user-pub-fail",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, body))
@@ -471,13 +472,13 @@ func TestListTransactions(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "user-tx",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		rebBody := map[string]any{
 			"user_id": "user-tx",
-			"new_allocation": map[string]int{
-				"stocks": 70, "bonds": 20, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 70.123, "bonds": 20.456, "gold": 9.421,
 			},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, rebBody))
@@ -540,13 +541,13 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "worker-ok",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "worker-ok",
 			NewAllocation: models.Allocation{
-				Stocks: 70, Bonds: 15, Gold: 15,
+				Stocks: 70.123, Bonds: 15.456, Gold: 14.421,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
@@ -556,8 +557,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if p.Allocation.Stocks != 70 {
-			t.Fatalf("stocks = %d", p.Allocation.Stocks)
+		if p.Allocation.Stocks != 70.123 {
+			t.Fatalf("stocks = %f", p.Allocation.Stocks)
 		}
 		txs, err := h.Store.ListTransactions(context.Background(), "worker-ok")
 		if err != nil {
@@ -568,13 +569,14 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		}
 
 		// check if transactions are selling bonds 15 and buying stocks 10 and gold 5
-		if txs[0].Type != "SELL" || txs[0].AllocationType != "bonds" || txs[0].Amount != 15 {
+		const eps = 1e-9
+		if txs[0].Type != "SELL" || txs[0].AllocationType != "bonds" || math.Abs(txs[0].Amount-15.0) > eps {
 			t.Fatalf("expected sell bonds 15, got %+v", txs[0])
 		}
-		if txs[1].Type != "BUY" || txs[1].AllocationType != "stocks" || txs[1].Amount != 10 {
+		if txs[1].Type != "BUY" || txs[1].AllocationType != "stocks" || math.Abs(txs[1].Amount-10.0) > eps {
 			t.Fatalf("expected buy stocks 10, got %+v", txs[1])
 		}
-		if txs[2].Type != "BUY" || txs[2].AllocationType != "gold" || txs[2].Amount != 5 {
+		if txs[2].Type != "BUY" || txs[2].AllocationType != "gold" || math.Abs(txs[2].Amount-5.0) > eps {
 			t.Fatalf("expected buy gold 15, got %+v", txs[2])
 		}
 	})
@@ -592,13 +594,13 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "worker-bad-alloc",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		msg, _ := json.Marshal(map[string]any{
 			"user_id": "worker-bad-alloc",
-			"new_allocation": map[string]int{
-				"stocks": 10, "bonds": 10, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 10.0, "bonds": 10.0, "gold": 10.0,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
@@ -610,8 +612,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		h := factory.NewTestHarness()
 		msg, _ := json.Marshal(map[string]any{
 			"user_id": "",
-			"new_allocation": map[string]int{
-				"stocks": 60, "bonds": 30, "gold": 10,
+			"new_allocation": map[string]float64{
+				"stocks": 60.123, "bonds": 30.456, "gold": 9.421,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
@@ -624,7 +626,7 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "nope",
 			NewAllocation: models.Allocation{
-				Stocks: 70, Bonds: 20, Gold: 10,
+				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
@@ -638,13 +640,13 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "worker-tx-fail",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "worker-tx-fail",
 			NewAllocation: models.Allocation{
-				Stocks: 70, Bonds: 20, Gold: 10,
+				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
 		err := h.Handler.HandleRebalanceMessage(msg)
@@ -658,14 +660,14 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "worker-save-p-fail",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		h.Store.ErrSavePortfolio = io.ErrNoProgress
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "worker-save-p-fail",
 			NewAllocation: models.Allocation{
-				Stocks: 70, Bonds: 20, Gold: 10,
+				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
 		err := h.Handler.HandleRebalanceMessage(msg)
@@ -679,13 +681,13 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
 			UserID: "worker-same",
 			Allocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "worker-same",
 			NewAllocation: models.Allocation{
-				Stocks: 60, Bonds: 30, Gold: 10,
+				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
 		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {

@@ -11,7 +11,7 @@ func CalculateRebalance(current models.Portfolio, target models.Portfolio) ([]mo
 	var sells []models.Transaction
 	var buys []models.Transaction
 
-	processAsset := func(assetName string, currentAmt, targetAmt int) error {
+	processAsset := func(assetName string, currentAmt, targetAmt float64) error {
 		drift := targetAmt - currentAmt
 		if drift > 0 {
 			newUUID, err := uuid.NewRandom()
