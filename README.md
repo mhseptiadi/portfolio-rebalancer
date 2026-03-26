@@ -131,3 +131,8 @@ Base URL: `http://localhost:8083`
             UserID = "1"
 	        Buy 10% of bonds
 
+## TODO / Known Limitations
+- Add per-user locking to prevent broken causal ordering during rebalance processing ("Causal Dependency Violation" case).
+  - See TODO in `internal/handlers/portfolio.go` (`HandleRebalance`).
+  - See TODO in `internal/kafka/kafka.go` (Kafka consumer/handler loop).
+
