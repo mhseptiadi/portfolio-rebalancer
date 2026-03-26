@@ -123,6 +123,7 @@ func (h *PortfolioHandler) ListPortfolios(w http.ResponseWriter, r *http.Request
 //	    "new_allocation": {"stocks": 70, "bonds": 20, "gold": 10}
 //	}
 func (h *PortfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Request) {
+	// TODO: check if user being locked to avoid borken next process of that particular user (Causal Dependency Violation case)
 	ctx := r.Context()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -208,6 +209,9 @@ func (h *PortfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *PortfolioHandler) HandleRebalanceMessage(ctx context.Context, msg []byte) error {
+	// test error
+	// return fmt.Errorf("test error")
+
 	var req models.UpdatedPortfolio
 	err := json.Unmarshal(msg, &req)
 	if err != nil {
