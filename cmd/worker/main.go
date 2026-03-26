@@ -31,7 +31,7 @@ func main() {
 	kafkaClients := make([]*kafka.Kafka, cfg.NumWorkers)
 
 	for i := 0; i < cfg.NumWorkers; i++ {
-		kafkaClients[i], err = kafka.InitKafka(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
+		kafkaClients[i], err = kafka.InitKafka(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID, true)
 		if err != nil {
 			log.Printf("Failed to initialize Kafka: %v", err)
 			stop()

@@ -20,7 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize Elasticsearch: %v", err)
 	}
-	kafka, err := kafka.InitKafka(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
+	kafka, err := kafka.InitKafka(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID, false)
 	if err != nil {
 		log.Fatalf("Failed to initialize Kafka: %v", err)
 	}

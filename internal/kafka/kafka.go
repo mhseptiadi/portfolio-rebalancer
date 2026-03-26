@@ -32,7 +32,7 @@ type Kafka struct {
 var _ MessagePublisher = (*Kafka)(nil)
 
 // InitKafka initializes kafka connection
-func InitKafka(kafkaBrokers []string, topic string, kafkaGroupID string) (*Kafka, error) {
+func InitKafka(kafkaBrokers []string, topic string, kafkaGroupID string, isWorker bool) (*Kafka, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(kafkaBrokers...),
 		Topic:        topic,
@@ -53,20 +53,24 @@ func InitKafka(kafkaBrokers []string, topic string, kafkaGroupID string) (*Kafka
 	// 	time.Sleep(2 * time.Second)
 	// }
 
-	deadWriter := &kafka.Writer{
-		Addr:                   kafka.TCP(kafkaBrokers...),
-		Topic:                  topic + "-dead",
-		Balancer:               &kafka.Hash{},
-		RequiredAcks:           kafka.RequireOne,
-		AllowAutoTopicCreation: true, // for dead letter topic, or create topic manually
-	}
+	var reader *kafka.Reader
+	var deadWriter *kafka.Writer
+	if isWorker {
+		deadWriter = &kafka.Writer{
+			Addr:                   kafka.TCP(kafkaBrokers...),
+			Topic:                  topic + "-dead",
+			Balancer:               &kafka.Hash{},
+			RequiredAcks:           kafka.RequireOne,
+			AllowAutoTopicCreation: true, // for dead letter topic, or create topic manually
+		}
 
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:     kafkaBrokers,
-		Topic:       topic,
-		GroupID:     kafkaGroupID,
-		StartOffset: kafka.FirstOffset,
-	})
+		reader = kafka.NewReader(kafka.ReaderConfig{
+			Brokers:     kafkaBrokers,
+			Topic:       topic,
+			GroupID:     kafkaGroupID,
+			StartOffset: kafka.FirstOffset,
+		})
+	}
 
 	return &Kafka{
 		topic:      topic,

@@ -17,7 +17,7 @@ type Config struct {
 
 func LoadConfig() Config {
 	cpuCount := runtime.NumCPU()
-	cpuCount = 10 // for testing
+	cpuCount = 2 // for testing
 	numWorkersEnv := os.Getenv("NUM_WORKERS")
 	numWorkers := 0
 	if numWorkersEnv == "" {
