@@ -3,9 +3,11 @@ package kafka
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"portfolio-rebalancer/internal/models"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -71,8 +73,25 @@ func (k *Kafka) PublishMessage(ctx context.Context, payload []byte) error {
 		return fmt.Errorf("kafka writer not initialized")
 	}
 
+	var req models.UpdatedPortfolio
+	err := json.Unmarshal(payload, &req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
 	msg := kafka.Message{
+		Key:   []byte(req.UserID),
 		Value: payload,
+		Headers: []kafka.Header{
+			{
+				Key:   "user_id",
+				Value: []byte(req.UserID),
+			},
+			{
+				Key:   "retry_count",
+				Value: []byte("0"),
+			},
+		},
 	}
 
 	return k.writer.WriteMessages(ctx, msg)
