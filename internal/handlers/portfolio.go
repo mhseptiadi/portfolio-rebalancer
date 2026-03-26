@@ -183,8 +183,31 @@ func (h *PortfolioHandler) HandleRebalance(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode("Rebalance request published")
 }
 
-func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
-	ctx := context.Background()
+func (h *PortfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+
+	list, err := h.store.ListTransactions(ctx, userID)
+	if err != nil {
+		http.Error(w, "Failed to list transactions", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(list)
+}
+
+func (h *PortfolioHandler) HandleRebalanceMessage(ctx context.Context, msg []byte) error {
 	var req models.UpdatedPortfolio
 	err := json.Unmarshal(msg, &req)
 	if err != nil {
@@ -236,28 +259,4 @@ func (h *PortfolioHandler) HandleRebalanceMessage(msg []byte) error {
 
 	log.Println("HandleRebalanceMessage completed")
 	return nil
-}
-
-func (h *PortfolioHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
-		return
-	}
-
-	list, err := h.store.ListTransactions(ctx, userID)
-	if err != nil {
-		http.Error(w, "Failed to list transactions", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(list)
 }

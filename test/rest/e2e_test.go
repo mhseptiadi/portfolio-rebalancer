@@ -146,7 +146,8 @@ func TestCreatePortfolio(t *testing.T) {
 func TestGetPortfolioByID(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-get-ok",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -216,7 +217,8 @@ func TestGetPortfolioByID(t *testing.T) {
 func TestListPortfolios(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-list-1",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -264,7 +266,8 @@ func TestListPortfolios(t *testing.T) {
 func TestRebalanceHTTP(t *testing.T) {
 	t.Run("success publishes message", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-reb-http",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -325,7 +328,8 @@ func TestRebalanceHTTP(t *testing.T) {
 
 	t.Run("failed when allocation is invalid", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-reb-bad",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -392,7 +396,8 @@ func TestRebalanceHTTP(t *testing.T) {
 
 	t.Run("failed when kafka is not configured", func(t *testing.T) {
 		h := factory.NewTestHarnessNoKafka()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-no-kafka",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -423,7 +428,8 @@ func TestRebalanceHTTP(t *testing.T) {
 	t.Run("failed to enqueue when publish fails", func(t *testing.T) {
 		h := factory.NewTestHarness()
 		h.Publish.PublishErr = io.ErrClosedPipe
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-pub-fail",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -469,7 +475,8 @@ func TestRebalanceHTTP(t *testing.T) {
 func TestListTransactions(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "user-tx",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -484,7 +491,7 @@ func TestListTransactions(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/rebalance", jsonBody(t, rebBody))
 		req.Header.Set("Content-Type", applicationJSON)
 		h.Mux.ServeHTTP(httptest.NewRecorder(), req)
-		if err := h.Handler.HandleRebalanceMessage(h.Publish.LastPayload()); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, h.Publish.LastPayload()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -538,7 +545,8 @@ func TestListTransactions(t *testing.T) {
 func TestWorkerHandleRebalanceMessage(t *testing.T) {
 	t.Run("success updates portfolio and writes transactions", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "worker-ok",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -550,17 +558,17 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 				Stocks: 70.123, Bonds: 15.456, Gold: 14.421,
 			},
 		})
-		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, msg); err != nil {
 			t.Fatal(err)
 		}
-		p, err := h.Store.GetPortfolio(context.Background(), "worker-ok")
+		p, err := h.Store.GetPortfolio(ctx, "worker-ok")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if p.Allocation.Stocks != 70.123 {
 			t.Fatalf("stocks = %f", p.Allocation.Stocks)
 		}
-		txs, err := h.Store.ListTransactions(context.Background(), "worker-ok")
+		txs, err := h.Store.ListTransactions(ctx, "worker-ok")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -583,7 +591,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 
 	t.Run("failed to unmarshal returns error", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		err := h.Handler.HandleRebalanceMessage([]byte(`{`))
+		ctx := context.Background()
+		err := h.Handler.HandleRebalanceMessage(ctx, []byte(`{`))
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -591,7 +600,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 
 	t.Run("invalid allocation returns nil (logged, skipped)", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "worker-bad-alloc",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -603,33 +613,35 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 				"stocks": 10.0, "bonds": 10.0, "gold": 10.0,
 			},
 		})
-		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, msg); err != nil {
 			t.Fatalf("got %v; handler returns nil for invalid allocation", err)
 		}
 	})
 
 	t.Run("empty user_id returns nil", func(t *testing.T) {
 		h := factory.NewTestHarness()
+		ctx := context.Background()
 		msg, _ := json.Marshal(map[string]any{
 			"user_id": "",
 			"new_allocation": map[string]float64{
 				"stocks": 60.123, "bonds": 30.456, "gold": 9.421,
 			},
 		})
-		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, msg); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("portfolio not found returns nil", func(t *testing.T) {
 		h := factory.NewTestHarness()
+		ctx := context.Background()
 		msg, _ := json.Marshal(models.UpdatedPortfolio{
 			UserID: "nope",
 			NewAllocation: models.Allocation{
 				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
-		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, msg); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -637,7 +649,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 	t.Run("failed to save transaction", func(t *testing.T) {
 		h := factory.NewTestHarness()
 		h.Store.ErrSaveTransaction = io.ErrShortBuffer
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "worker-tx-fail",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -649,7 +662,7 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
-		err := h.Handler.HandleRebalanceMessage(msg)
+		err := h.Handler.HandleRebalanceMessage(ctx, msg)
 		if err == nil || !strings.Contains(err.Error(), "failed to save transaction") {
 			t.Fatalf("err = %v", err)
 		}
@@ -657,7 +670,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 
 	t.Run("failed to save new portfolio", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "worker-save-p-fail",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -670,7 +684,7 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 				Stocks: 70.123, Bonds: 20.456, Gold: 9.421,
 			},
 		})
-		err := h.Handler.HandleRebalanceMessage(msg)
+		err := h.Handler.HandleRebalanceMessage(ctx, msg)
 		if err == nil || !strings.Contains(err.Error(), "failed to save new portfolio") {
 			t.Fatalf("err = %v", err)
 		}
@@ -678,7 +692,8 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 
 	t.Run("same allocation is no-op success", func(t *testing.T) {
 		h := factory.NewTestHarness()
-		_ = h.Store.SavePortfolio(context.Background(), models.Portfolio{
+		ctx := context.Background()
+		_ = h.Store.SavePortfolio(ctx, models.Portfolio{
 			UserID: "worker-same",
 			Allocation: models.Allocation{
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
@@ -690,10 +705,10 @@ func TestWorkerHandleRebalanceMessage(t *testing.T) {
 				Stocks: 60.123, Bonds: 30.456, Gold: 9.421,
 			},
 		})
-		if err := h.Handler.HandleRebalanceMessage(msg); err != nil {
+		if err := h.Handler.HandleRebalanceMessage(ctx, msg); err != nil {
 			t.Fatal(err)
 		}
-		txs, _ := h.Store.ListTransactions(context.Background(), "worker-same")
+		txs, _ := h.Store.ListTransactions(ctx, "worker-same")
 		if len(txs) != 0 {
 			t.Fatalf("expected no txs, got %d", len(txs))
 		}

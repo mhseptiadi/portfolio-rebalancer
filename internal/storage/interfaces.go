@@ -15,5 +15,5 @@ type TransactionRepository interface {
 	GetTransaction(ctx context.Context, id string) (models.Transaction, error)
 	SaveTransaction(ctx context.Context, t models.Transaction) error
 	ListTransactions(ctx context.Context, portfolioID string) ([]models.Transaction, error)
-	ListAllTransactions(ctx context.Context) ([]models.Transaction, error)
+	HandleRebalanceMessage(ctx context.Context, msg []byte) error
 }

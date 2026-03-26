@@ -8,7 +8,7 @@ import (
 
 func TestConsumeMessage_ReaderNotInitialized(t *testing.T) {
 	k := &Kafka{}
-	err := k.ConsumeMessage(context.Background(), func([]byte) error { return nil })
+	err := k.ConsumeMessage(context.Background(), func(context.Context, []byte) error { return nil })
 	if err == nil {
 		t.Fatal("expected error when reader is nil")
 	}

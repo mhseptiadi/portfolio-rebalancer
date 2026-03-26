@@ -3,6 +3,7 @@ package kafka
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -79,7 +80,7 @@ func (k *Kafka) PublishMessage(ctx context.Context, payload []byte) error {
 
 func (k *Kafka) ConsumeMessage(
 	ctx context.Context,
-	handler func([]byte) error,
+	handler func(context.Context, []byte) error,
 ) error {
 	if k == nil || k.reader == nil {
 		return fmt.Errorf("kafka reader not initialized")
@@ -89,7 +90,13 @@ func (k *Kafka) ConsumeMessage(
 		msg, err := k.reader.ReadMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				if errors.Is(ctx.Err(), context.Canceled) {
+					return nil
+				}
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					return nil
+				}
+				return ctx.Err()
 			}
 
 			log.Printf("[kafka] read error: %v", err)
@@ -100,7 +107,7 @@ func (k *Kafka) ConsumeMessage(
 			continue
 		}
 
-		if err := handler(msg.Value); err != nil {
+		if err := handler(ctx, msg.Value); err != nil {
 			log.Printf("Kafka handler error: %v\n", err)
 			continue
 		}
@@ -112,18 +119,18 @@ func (k *Kafka) Close() []error {
 		return nil
 	}
 
-	var errors []error
+	var errs []error
 
 	if k.reader != nil {
 		if err := k.reader.Close(); err != nil {
-			errors = append(errors, err)
+			errs = append(errs, err)
 		}
 	}
 	if k.writer != nil {
 		if err := k.writer.Close(); err != nil {
-			errors = append(errors, err)
+			errs = append(errs, err)
 		}
 	}
 
-	return errors
+	return errs
 }
